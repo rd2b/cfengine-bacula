@@ -154,6 +154,7 @@ files:
             perms   => promisemode("644");
 
         "$(baculafolder)/scripts"
+            depth_search => recurse("inf"),
             perms   => promisemode("755");
 
     backupclient::
