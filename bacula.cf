@@ -154,7 +154,7 @@ files:
             perms   => promisemode("644");
 
         "$(baculafolder)/scripts"
-            perms   => promisemod("755");
+            perms   => promisemode("755");
 
     backupclient::
         "$(clientfiledaemon)"
