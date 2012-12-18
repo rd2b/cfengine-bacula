@@ -60,6 +60,9 @@ body agent control {
 }
 ```
 
+Then run "cf-agent" on your local machine. Add -DCFpackages, to install/update packages
+
+
 
 
 Links
