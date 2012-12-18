@@ -147,7 +147,7 @@ files:
         "$(baculafolder)"
             comment => "Copying $(baculafolder) with $(local_bacula) files",
             copy_from => local_cp("$(local_bacula)"),
-            perms   => promisemode("644");
+            perms   => promisemode("644"),
             depth_search => recurse("inf"),
             classes => if_repaired("restartDirector");
 
