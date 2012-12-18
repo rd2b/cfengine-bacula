@@ -1,0 +1,310 @@
+#####################################################
+#   Name:   bacula.cf                               #
+#   Description: Cfengine bundle to automate Bacula #
+#                configuration process.             #
+#####################################################
+#
+# Repos : https://github.com/rd2b/cfengine-bacula
+# 
+
+bundle agent app_bacula {
+vars:
+    any::
+        # Sets the bacula director:
+        "baculadirector"   string => "back01.acgform.local";
+
+        "local_cache"  string => "/var/cache/cfengine3/app_bacula";
+        "baculafolder" string => "/etc/bacula";
+        "local_bacula" string => "$(local_cache)/$(baculafolder)";
+
+        # Sets some passwords needed in Templates
+        # Those passwords must be overwrited:
+        "DIRPASSWD"  string => "p1BgtT9k4kmr7G8SS7SqXPlWkCFeNmSWu";
+        "DIRMPASSWD" string => "FTVFNk9NUEEFY7lNwKJKl4NESXBKPtQ2X";
+        "SDPASSWD"   string => "I7uYy8UJ5gacHa-x55QjPKyfPheSQWCUk";
+        "SDMPASSWD"  string => "CfnP_qNDd1QD2kaWHOMiXRD7RJk3dFE55";
+        "FDPASSWD"   string => "HyFo__BaxZGn0IH4uJdzIY_SHnpfqOEYD";
+        "FDMPASSWD"  string => "aSVRFQuJM6jci6fcfLtIfI1QtRKgSkedr";
+
+    backupmaster::
+        "baculaserverpackages" slist => { "bacula-server" };
+
+        "baculadisklistdir" string => "/etc/bacula/disklists";
+        "baculadisklist"    string => "$(baculadisklistdir)/default"; 
+        "nbdisklist"      int => readstringarrayidx(
+                "disklist", "$(baculadisklist)", "\s*#[^\n]*", "\s+", 3000, 10000);
+        "disklistindices"  slist => getindices("disklist");
+
+        "filesets[$(disklist[$(disklistindices)][1])]" 
+            string => canonify("$(disklist[$(disklistindices)][1])");
+
+        "serverfilestocopy" slist => { 
+            "$(baculafolder)/bacula-dir.conf",
+            "$(baculafolder)/bacula-sd.conf",
+            "$(baculadisklist)"
+        };
+
+        "serverdirstocopy" slist => { 
+            "/etc/bacula/clients",
+            "/etc/bacula/jobs",
+            "/etc/bacula/disklists",
+            "/etc/bacula/filesets",
+            "/etc/bacula/schedules"
+        };
+
+        # Contains files to include all others:
+        "serverclientinclude"  string => "$(baculafolder)/clients/client-list.cula";
+        "serverfilesetinclude" string => "$(baculafolder)/filesets/filesets-list.cula";
+        "serverjobinclude"     string => "$(baculafolder)/jobs/jobs-list.cula";
+
+    backupclient::
+        "baculaclientpackages" slist => { "bacula-fd" };
+        "clientfiledaemon" string => "$(baculafolder)/bacula-fd.conf";
+
+packages:
+    backupmaster.CFpackages::
+        "$(baculaserverpackages)"
+        comment => "install $(baculaserverpackages)",
+                package_policy   => "add",
+                package_method   => generic;
+
+    backupclient.CFpackages::
+        "$(baculaclientpackages)"
+        comment => "install $(baculaclientpackages)",
+                package_policy   => "add",
+                package_method   => generic;
+
+files:
+    backupmaster::
+        "$(serverfilestocopy)"
+           comment   => "Copying $(serverfilestocopy)",
+           perms     => promisemode("644"),
+           copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverfilestocopy)","$(globals.serverhost)"),
+           classes => if_repaired("restartDirector");
+
+#################################
+# Editing includes lists:
+        "$(serverclientinclude)"
+            comment   => "Adding new client file to $(serverclientinclude)",
+            create    => "true",
+            perms     => promisemode("644"),
+            edit_line => append_if_no_lines("@$(baculafolder)/clients/$(disklist[$(disklistindices)][0]).conf");
+
+       "$(serverfilesetinclude)"
+            comment   => "Adding new fileset file to $(serverclientinclude)",
+            create    => "true",
+            perms     => promisemode("644"),
+            edit_line => append_if_no_lines("@$(baculafolder)/filesets/Fileset$(filesets[$(disklist[$(disklistindices)][1])]).conf");
+
+       "$(serverjobinclude)"
+            comment   => "Adding new job file to $(serverjobinclude)",
+            create    => "true",
+            perms     => promisemode("644"),
+            edit_line => append_if_no_lines("@$(baculafolder)/jobs/$(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf");
+
+#################################
+
+        # Clients files:
+        "$(local_bacula)/clients/$(disklist[$(disklistindices)][0]).conf"
+            create => "true",
+            perms     => promisemode("644"),
+            edit_defaults => empty,
+            edit_line => do_baculaClient(
+                    "$(disklist[$(disklistindices)][0])",
+                    "$(FDPASSWD)"),
+            comment => "Configuring the client file $(disklist[$(disklistindices)][0]).conf";
+
+        # Filesets files:
+        "$(local_bacula)/filesets/Fileset$(filesets[$(disklist[$(disklistindices)][1])]).conf"
+            create => "true",
+            perms     => promisemode("644"),
+            edit_defaults => empty,
+            edit_line => do_baculaFileSet("$(disklist[$(disklistindices)][1])"),
+            comment => "Configuring the fileset file $(disklist[$(disklistindices)][1])";
+
+        # Jobs files:
+        "$(local_bacula)/jobs/$(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf"
+            create => "true",
+            perms     => promisemode("644"),
+            edit_defaults => empty,
+            edit_line => do_baculaJob(
+                    "$(disklist[$(disklistindices)][0])",
+                    "$(disklist[$(disklistindices)][1])", 
+                    "$(disklist[$(disklistindices)][2])"),
+            comment => "Configuring the job file $(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf";
+
+        # Surcharge avec les fichiers de clients presents dans les depots
+        "$(local_cache)/$(serverdirstocopy)"
+            comment => "Copying $(serverdirstocopy)",
+            perms     => promisemode("644"),
+            copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverdirstocopy)","$(globals.serverhost)"),
+            depth_search => recurse("inf");
+
+
+#################################
+        # Copying from cache dir to bacula's directory
+        # Used to detect if changed has been made
+        "$(baculafolder)"
+            comment => "Copying $(baculafolder) with $(local_bacula) files",
+            copy_from => local_cp("$(local_bacula)"),
+            depth_search => recurse("inf"),
+            classes => if_repaired("restartDirector");
+
+    backupclient::
+        "$(clientfiledaemon)"
+           create => "true",
+           perms     => promisemode("644"),
+           edit_defaults => empty,
+           edit_line => do_baculaFileDaemon(
+                   "$(baculadirector)",
+                   "$(FDPASSWD)",
+                   "$(FDMPASSWD)"
+                   ),
+           comment => "Configuring the client file $(clientfiletocopy)",
+           classes => if_repaired("restartFD");
+
+commands:
+    # Basiclly only restarting processes if something as been changed
+
+    restartDirector::
+        "/etc/init.d/bacula-director restart"
+            comment => "Restarting Bacula Director.";
+
+    restartSD::
+        "/etc/init.d/bacula-sd restart"
+            comment => "Restarting Bacula Storage-Daemon.";
+
+    restartFD::
+        "/etc/init.d/bacula-fd restart",
+            comment => "Restarting Bacula File-Daemon.";
+
+reports:
+    backupmaster::
+        "I am backup master";
+        "This is my disklist:";
+        "$(disklist[$(disklistindices)][0]) $(disklist[$(disklistindices)][1]) $(disklist[$(disklistindices)][2])";
+        "";
+        "Those are my filesets:";
+        "$(filesets[$(disklist[$(disklistindices)][1])]) -> $(disklist[$(disklistindices)][1])";
+
+    backupclient::
+        "I am backup client";
+
+}
+
+#######################################################
+# Configure the Client file
+# Setting the client name value
+# Adding a header to tell the file is configured by Cfengine
+#######################################################
+bundle edit_line do_baculaClient(clientname, fd_password) {
+insert_lines:
+"#############################################################
+### This file is configured by Cfengine.
+### Manually editing the file might lead Cfengine
+### to change back its content
+#############################################################
+# Client (File Services) to backup
+Client {
+    Name = $(clientname)
+    Address = $(clientname)
+    FDPort = 9102
+    Catalog = MyCatalog
+    Password = \"$(fd_password)\"          # password for FileDaemon
+    File Retention = 30 days            # 30 days
+    Job Retention = 6 months            # six months
+    AutoPrune = yes                     # Prune expired Jobs/Files
+}
+";
+}
+
+bundle edit_line do_baculaJob(clientname, folder, clientjob) {
+vars:
+    "filesetname"   string => canonify("$(folder)");
+
+insert_lines:
+"#############################################################
+### This file is configured by Cfengine.
+### Manually editing the file might lead Cfengine
+### to change back its content
+#############################################################
+Job {
+    Name = \"$(clientname)$(filesetname)\"
+    JobDefs = \"$(clientjob)\"
+    FileSet = \"Fileset$(filesetname)\"
+    Client = $(clientname)
+}
+     
+";
+}
+
+bundle edit_line do_baculaFileSet(folder) {
+vars:
+    "filesetname"   string => canonify("$(folder)");
+
+insert_lines:
+"#############################################################
+### This file is configured by Cfengine.
+### Manually editing the file might lead Cfengine
+### to change back its content
+#############################################################
+FileSet {
+    Name = \"Fileset$(filesetname)\"
+    Include {
+        Options {
+            signature = MD5
+            compression = GZIP
+        }
+        File = $(folder)
+    }
+    Exclude {
+    } 
+}
+";
+}
+
+
+bundle edit_line do_baculaFileDaemon(directorname, directorpassword, directormonitoringpassword) {
+insert_lines:
+"#############################################################
+### This file is configured by Cfengine.
+### Manually editing the file might lead Cfengine
+### to change back its content
+#############################################################
+#
+# List Directors who are permitted to contact this File daemon
+#
+Director {
+    Name = $(directorname)-dir
+    Password = \"$(directorpassword)\"
+}
+
+#
+# Restricted Director, used by tray-monitor to get the
+#   status of the file daemon
+#
+Director {
+    Name = $(directorname)-mon
+    Password = \"$(directormonitoringpassword)\"
+    Monitor = yes
+}
+
+#
+# Global File daemon configuration specifications
+#
+FileDaemon {                          # this is me
+    Name = localhost-fd
+    FDport = 9102                  # where we listen for the director
+    WorkingDirectory = /var/lib/bacula
+    Pid Directory = /var/run/bacula
+    Maximum Concurrent Jobs = 20
+}
+
+# Send all messages except skipped files back to Director
+Messages {
+    Name = Standard
+    director = $(directorname)-dir = all, !skipped, !restored
+}
+";
+}
+
