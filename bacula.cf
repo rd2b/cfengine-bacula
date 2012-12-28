@@ -40,7 +40,6 @@ vars:
 
         "serverfilestocopy" slist => { 
             "$(baculafolder)/bacula-dir.conf",
-            "$(baculafolder)/bacula-sd.conf",
             "$(baculadisklist)"
         };
 
@@ -56,6 +55,8 @@ vars:
         "serverclientinclude"  string => "$(baculafolder)/clients/client-list.cula";
         "serverfilesetinclude" string => "$(baculafolder)/filesets/filesets-list.cula";
         "serverjobinclude"     string => "$(baculafolder)/jobs/jobs-list.cula";
+
+        "storagedaemonfile" string => "$(baculafolder)/bacula-sd.conf";
 
     backupclient::
         "baculaclientpackages" slist => { "bacula-fd" };
@@ -81,6 +82,19 @@ files:
            perms     => promisemode("644"),
            copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverfilestocopy)","$(globals.serverhost)"),
            classes => if_repaired("restartDirector");
+
+        "$(storagedaemonfile)"
+           create => "true",
+           perms     => promisemode("644"),
+           edit_defaults => empty,
+           edit_line => do_baculaStorageDaemon(
+                   "$(baculadirector)",
+                   "$(SDPASSWD)",
+                   "$(SDMPASSWD)"
+                   ),
+           comment => "Configuring the storage file $(storagedaemonfile)",
+           classes => if_repaired("restartSD");
+
 
 #################################
 # Editing includes lists:
@@ -147,7 +161,6 @@ files:
         "$(baculafolder)"
             comment => "Copying $(baculafolder) with $(local_bacula) files",
             copy_from => local_cp("$(local_bacula)"),
-            perms   => promisemode("644"),
             depth_search => recurse("inf"),
             classes => if_repaired("restartDirector");
 
@@ -306,6 +319,67 @@ FileDaemon {                          # this is me
     WorkingDirectory = /var/lib/bacula
     Pid Directory = /var/run/bacula
     Maximum Concurrent Jobs = 20
+}
+
+# Send all messages except skipped files back to Director
+Messages {
+    Name = Standard
+    director = $(directorname)-dir = all, !skipped, !restored
+}
+";
+}
+
+bundle edit_line do_baculaStorageDaemon(directorname, directorpassword, directormonitoringpassword) {
+insert_lines:
+"#############################################################
+### This file is configured by Cfengine.
+### Manually editing the file might lead Cfengine
+### to change back its content
+#############################################################
+#
+# List Directors who are permitted to contact this Storage daemon
+#
+Director {
+    Name = $(directorname)-dir
+    Password = \"$(directorpassword)\"
+}
+
+#
+# Restricted Director, used by tray-monitor to get the
+#   status of the file daemon
+#
+Director {
+    Name = $(directorname)-mon
+    Password = \"$(directormonitoringpassword)\"
+    Monitor = yes
+}
+
+#
+# Global Storage daemon configuration specifications
+#
+Storage {                          # this is me
+    Name = localhost-sd
+    SDport = 9103                  # where we listen for the director
+    WorkingDirectory = /var/lib/bacula
+    Pid Directory = /var/run/bacula
+    Maximum Concurrent Jobs = 20
+}
+
+#
+# Devices supported by this Storage daemon
+# To connect, the Director's bacula-dir.conf must have the
+#  same Name and MediaType.
+#
+
+Device {    
+    Name = FileStorage
+    Media Type = File
+    Archive Device = /data/backups
+    LabelMedia = yes
+    Random Access = yes
+    AutomaticMount = yes
+    RemovableMedia = no
+    AlwaysOpen = no
 }
 
 # Send all messages except skipped files back to Director
