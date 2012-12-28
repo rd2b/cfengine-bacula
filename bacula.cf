@@ -51,11 +51,6 @@ vars:
             "/etc/bacula/schedules"
         };
 
-        # Contains files to include all others:
-        "serverclientinclude"  string => "$(baculafolder)/clients/client-list.cula";
-        "serverfilesetinclude" string => "$(baculafolder)/filesets/filesets-list.cula";
-        "serverjobinclude"     string => "$(baculafolder)/jobs/jobs-list.cula";
-
         "storagedaemonfile" string => "$(baculafolder)/bacula-sd.conf";
 
     backupclient::
@@ -88,30 +83,7 @@ files:
            comment => "Configuring the storage file $(storagedaemonfile)",
            classes => if_repaired("restartSD");
 
-
-#################################
-# Editing includes lists:
-        "$(serverclientinclude)"
-            comment   => "Adding new client file to $(serverclientinclude)",
-            create    => "true",
-            perms     => promisemode("644"),
-            edit_line => append_if_no_lines("@$(baculafolder)/clients/$(disklist[$(disklistindices)][0]).conf");
-
-       "$(serverfilesetinclude)"
-            comment   => "Adding new fileset file to $(serverclientinclude)",
-            create    => "true",
-            perms     => promisemode("644"),
-            edit_line => append_if_no_lines("@$(baculafolder)/filesets/Fileset$(filesets[$(disklist[$(disklistindices)][1])]).conf");
-
-       "$(serverjobinclude)"
-            comment   => "Adding new job file to $(serverjobinclude)",
-            create    => "true",
-            perms     => promisemode("644"),
-            edit_line => append_if_no_lines("@$(baculafolder)/jobs/$(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf");
-
-#################################
-
-        # Clients files:
+       # Clients files:
         "$(local_bacula)/clients/$(disklist[$(disklistindices)][0]).conf"
             create => "true",
             edit_defaults => empty,
