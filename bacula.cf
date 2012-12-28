@@ -77,15 +77,8 @@ packages:
 
 files:
     backupmaster::
-        "$(serverfilestocopy)"
-           comment   => "Copying $(serverfilestocopy)",
-           perms     => promisemode("644"),
-           copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverfilestocopy)","$(globals.serverhost)"),
-           classes => if_repaired("restartDirector");
-
         "$(storagedaemonfile)"
            create => "true",
-           perms     => promisemode("644"),
            edit_defaults => empty,
            edit_line => do_baculaStorageDaemon(
                    "$(baculadirector)",
@@ -121,8 +114,8 @@ files:
         # Clients files:
         "$(local_bacula)/clients/$(disklist[$(disklistindices)][0]).conf"
             create => "true",
-            perms     => promisemode("644"),
             edit_defaults => empty,
+            copy_backup => "false",
             edit_line => do_baculaClient(
                     "$(disklist[$(disklistindices)][0])",
                     "$(FDPASSWD)"),
@@ -131,16 +124,16 @@ files:
         # Filesets files:
         "$(local_bacula)/filesets/Fileset$(filesets[$(disklist[$(disklistindices)][1])]).conf"
             create => "true",
-            perms     => promisemode("644"),
             edit_defaults => empty,
+            copy_backup => "false",
             edit_line => do_baculaFileSet("$(disklist[$(disklistindices)][1])"),
             comment => "Configuring the fileset file $(disklist[$(disklistindices)][1])";
 
         # Jobs files:
         "$(local_bacula)/jobs/$(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf"
             create => "true",
-            perms     => promisemode("644"),
             edit_defaults => empty,
+            copy_backup => "false",
             edit_line => do_baculaJob(
                     "$(disklist[$(disklistindices)][0])",
                     "$(disklist[$(disklistindices)][1])", 
@@ -148,9 +141,14 @@ files:
             comment => "Configuring the job file $(disklist[$(disklistindices)][0])$(filesets[$(disklist[$(disklistindices)][1])]).conf";
 
         # Surcharge avec les fichiers de clients presents dans les depots
+        "$(local_cache)/$(serverfilestocopy)"
+           comment   => "Copying $(serverfilestocopy)",
+           copy_backup => "false",
+           copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverfilestocopy)","$(globals.serverhost)");
+
         "$(local_cache)/$(serverdirstocopy)"
             comment => "Copying $(serverdirstocopy)",
-            perms     => promisemode("644"),
+            copy_backup => "false",
             copy_from => secure_cp("$(globals.group_path)/groups/backup/$(serverdirstocopy)","$(globals.serverhost)"),
             depth_search => recurse("inf");
 
@@ -160,12 +158,19 @@ files:
         # Used to detect if changed has been made
         "$(baculafolder)"
             comment => "Copying $(baculafolder) with $(local_bacula) files",
+            compare => "digest",
             copy_from => local_cp("$(local_bacula)"),
             depth_search => recurse("inf"),
             classes => if_repaired("restartDirector");
 
+#Fixing permissions:
         "$(baculafolder)"
             perms   => promisemode("644");
+
+        "$(serverdirstocopy)"
+            depth_search => recurse("inf"),
+            perms   => promisemode("644");
+
 
         "$(baculafolder)/scripts"
             depth_search => recurse("inf"),
