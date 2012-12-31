@@ -26,6 +26,10 @@ vars:
         "FDPASSWD"   string => "HyFo__BaxZGn0IH4uJdzIY_SHnpfqOEYD";
         "FDMPASSWD"  string => "aSVRFQuJM6jci6fcfLtIfI1QtRKgSkedr";
 
+        "directorprocess"   string => "/usr/sbin/bacula-dir";
+        "storageprocess"    string => "/usr/sbin/bacula-fd";
+        "fileprocess"       string => "/usr/sbin/bacula-sd";
+
     backupmaster::
         "baculaserverpackages" slist => { "bacula-server" };
 
@@ -81,7 +85,7 @@ files:
                    "$(SDMPASSWD)"
                    ),
            comment => "Configuring the storage file $(storagedaemonfile)",
-           classes => if_repaired("restartSD");
+           classes => if_repaired("reloadSD");
 
        # Clients files:
         "$(local_bacula)/clients/$(disklist[$(disklistindices)][0]).conf"
@@ -133,7 +137,7 @@ files:
             compare => "digest",
             copy_from => local_cp("$(local_bacula)"),
             depth_search => recurse("inf"),
-            classes => if_repaired("restartDirector");
+            classes => if_repaired("reloadDirector");
 
 #Fixing permissions:
         "$(baculafolder)"
@@ -159,7 +163,16 @@ files:
                    "$(FDMPASSWD)"
                    ),
            comment => "Configuring the client file $(clientfiletocopy)",
-           classes => if_repaired("restartFD");
+           classes => if_repaired("reloadFD");
+
+processes:
+    backupmaster::
+        "$(directorprocess)" restart_class => "restartDirector";
+        "$(storageprocess)" restart_class  => "restartSD";
+
+    backupclient::
+        "$(fileprocess)" restart_class  => "restartFD";
+
 
 commands:
     # Basiclly only restarting processes if something as been changed
@@ -175,6 +188,19 @@ commands:
     restartFD::
         "/etc/init.d/bacula-fd restart",
             comment => "Restarting Bacula File-Daemon.";
+
+    reloadDirector::
+        "/etc/init.d/bacula-director reload"
+            comment => "Reloading Bacula Director.";
+
+    reloadSD::
+        "/etc/init.d/bacula-sd reload"
+            comment => "Reloading Bacula Storage-Daemon.";
+
+    reloadFD::
+        "/etc/init.d/bacula-fd reload",
+            comment => "Reloading Bacula File-Daemon.";
+
 
 reports:
     backupmaster::
