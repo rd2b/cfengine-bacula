@@ -205,6 +205,7 @@ commands:
 reports:
     backupmaster::
         "I am backup master";
+    backupmaster.verbose_mode::
         "This is my disklist:";
         "$(disklist[$(disklistindices)][0]) $(disklist[$(disklistindices)][1]) $(disklist[$(disklistindices)][2])";
         "";
