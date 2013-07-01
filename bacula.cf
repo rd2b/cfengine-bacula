@@ -44,6 +44,7 @@ vars:
 
         "serverfilestocopy" slist => { 
             "$(baculafolder)/bacula-dir.conf",
+            "$(baculafolder)/bconsole.conf",
             "$(baculadisklist)"
         };
 
