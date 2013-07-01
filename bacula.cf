@@ -4,7 +4,7 @@
 #                configuration process.             #
 #####################################################
 #
-# Repos : https://github.com/rd2b/cfengine-bacula
+# Repos : https://github.com/rd2b/cfenginebacula
 # 
 
 bundle agent app_bacula {
